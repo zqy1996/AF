@@ -1,0 +1,1229 @@
+# 2025-11-10
+#pQTL
+#library
+library(TwoSampleMR)
+library(ggplot2)
+library(foreach)
+
+genelist=read.table("id_clump.txt",header = T,sep = "\t")
+genelist1=as.vector(genelist$id)
+genelist1=genelist1[1:4760]
+result=data.frame()
+foreach(i=genelist1, .errorhandling = "pass") %do% {  
+  expo_rt <- read_exposure_data(  
+    filename = paste0("bd_pqtlclump/", i, "_expo_rt.txt"),  
+    sep = "\t",  
+    snp_col = "rsids",  
+    beta_col = "Beta",  
+    se_col = "SE",  
+    effect_allele_col = "effectAllele",  
+    other_allele_col = "otherAllele",  
+    eaf_col = "ImpMAF",  
+    pval_col = "Pval",  
+    samplesize_col = "N"  
+  )  
+  
+  outc_rt <- read_outcome_data(  
+    snps = expo_rt$SNP,  
+    filename = "finngen_R10_I9_AF.gz",  
+    sep = "\t",  
+    snp_col = "rsids",  
+    beta_col = "beta",  
+    se_col = "sebeta",  
+    effect_allele_col = "alt",  
+    other_allele_col = "ref",  
+    eaf_col = "af_alt",  
+    pval_col = "pval"  
+  )  
+  
+  harm_rt <- harmonise_data(  
+    exposure_dat = expo_rt,  
+    outcome_dat = outc_rt,  
+    action = 2  
+  )  
+  
+  harm_rt$R2 <- (2 * (harm_rt$beta.exposure^2) * harm_rt$eaf.exposure * (1 - harm_rt$eaf.exposure)) /  
+    (2 * (harm_rt$beta.exposure^2) * harm_rt$eaf.exposure * (1 - harm_rt$eaf.exposure) +  
+       2 * harm_rt$samplesize.exposure * harm_rt$eaf.exposure * (1 - harm_rt$eaf.exposure) * harm_rt$se.exposure^2)  
+  
+  harm_rt$f <- harm_rt$R2 * (harm_rt$samplesize.exposure - 2) / (1 - harm_rt$R2)  
+  harm_rt$meanf <- mean(harm_rt$f)  
+  harm_rt <- harm_rt[harm_rt$f > 10, ]  
+  
+  mr_result <- mr(harm_rt)  
+  result_or = generate_odds_ratios(mr_result)  
+  result_or$FDR = p.adjust(result_or$pval, method = "fdr", n = 412181)  
+  if (length(result_or$pval) >= 3 && result_or$pval[3] < 0.05 && result_or$FDR[3] < 0.05) {  
+    filename <- paste0("bdpqtlresult/", i)  
+    dir.create(filename, showWarnings = FALSE)  # Prevent warnings if directory exists  
+    write.table(harm_rt, file = paste0(filename, "/harmonise.txt"), row.names = FALSE, sep = "\t", quote = FALSE)  
+    write.table(result_or[, 5:ncol(result_or)], file = paste0(filename, "/OR.txt"), row.names = FALSE, sep = "\t", quote = FALSE)  
+    
+    pleiotropy <- mr_pleiotropy_test(harm_rt)  
+    write.table(pleiotropy, file = paste0(filename, "/pleiotropy.txt"), sep = "\t", quote = FALSE)  
+    
+    heterogeneity <- mr_heterogeneity(harm_rt)  
+    write.table(heterogeneity, file = paste0(filename, "/heterogeneity.txt"), sep = "\t", quote = FALSE)  
+    
+    result <- rbind(result, cbind(  
+      id = i,  
+      nsnp = result_or$nsnp[3],  
+      beta = result_or$b[3],  
+      se = result_or$se[3],  
+      pvalue = result_or$pval[3],  
+      or = result_or$or[3],  
+      or_lci95 = result_or$or_lci95[3],  
+      or_uci95 = result_or$or_uci95[3],  
+      FDR = result_or$FDR[3],  
+      Heter.Stat = heterogeneity$Q[2],  
+      Heter.p = heterogeneity$Q_pval[2],  
+      egger_intercept = pleiotropy$egger_intercept,  
+      egger_intercept_se = pleiotropy$se,  
+      egger_intercept_pval = pleiotropy$pval  
+    ))   
+    
+    p1 <- mr_scatter_plot(mr_result, harm_rt)  
+    ggsave(p1[[1]], file = paste0(filename, "/scatter.pdf"), width = 8, height = 8)  
+    
+    singlesnp_res <- mr_singlesnp(harm_rt)  
+    singlesnpOR = generate_odds_ratios(singlesnp_res)  
+    write.table(singlesnpOR, file = paste0(filename, "/singlesnpOR.txt"), row.names = FALSE, sep = "\t", quote = FALSE)  
+    
+    p2 <- mr_forest_plot(singlesnp_res)  
+    ggsave(p2[[1]], file = paste0(filename, "/forest.pdf"), width = 8, height = 8)  
+    
+    sen_res <- mr_leaveoneout(harm_rt)  
+    p3 <- mr_leaveoneout_plot(sen_res)  
+    ggsave(p3[[1]], file = paste0(filename, "/sensitivity-analysis.pdf"), width = 8, height = 8)  
+    
+    p4 <- mr_funnel_plot(singlesnp_res)  
+    ggsave(p4[[1]], file = paste0(filename, "/funnelplot.pdf"), width = 8, height = 8)  
+    
+    presso = run_mr_presso(harm_rt, NbDistribution = 1000)  
+    capture.output(presso, file = paste0(filename, "/presso.txt"))  
+  }
+}
+
+write.table(result,"bdpqtl_result-finn1-4760.txt",sep = "\t",quote = F,row.names = F)
+#coloc
+library(data.table)
+library(dplyr)
+library(coloc)
+library(foreach)
+library(tidyverse) 
+
+genelist = read.table(file("colocid.txt", encoding = "UTF-16"), header = TRUE, sep = "\t", stringsAsFactors = FALSE)  
+
+genelist1=as.vector(genelist$id)
+
+result=data.frame()
+
+mythreshold <- 250000 #1MB =1000kb #500kb 250 #100kb
+
+foreach(i=genelist1, .errorhandling = "pass") %do%{
+  df1=fread(file = paste0("cis_bdpqtl/",i,".txt.gz"))
+  
+  head(df1)
+  df1=df1[df1$ImpMAF>0.01,] #maf过滤 
+  df1=df1[df1$Pval<5e-8,] #p值过滤 -6 -7 -8
+  gene=unlist(strsplit(i,split = "_"))[3]
+  
+  df1= subset(df1, df1$Pos>= genelist$postart[genelist$Exposure==gene]-mythreshold & df1$Pos<= genelist$posend[genelist$Exposure==gene]+mythreshold)
+  df1=data.frame(SNP=df1$rsids,chrom=substr(df1$Chrom,4,5),
+                 pos=df1$Pos,A1=df1$effectAllele,A2=df1$otherAllele,beta=df1$Beta,
+                 se=df1$SE,
+                 MAF=df1$ImpMAF,
+                 p=df1$Pval,
+                 N=df1$N)
+  
+  df1<- df1 %>%    
+    filter(SNP != ""& !duplicated(SNP) & SNP != ".") 
+  a=grep(",",df1$SNP)
+  df1=df1[-(a),]
+  
+  topsnp1<-df1%>%arrange(p)
+  topsnp=topsnp1$SNP[1]
+  df2=fread("myoutcome.tsv.gz",header = T)
+  head(df2)
+  df2=data.frame(SNP=df2$variant_id,chrom=df2$chromosome,
+                 pos=df2$base_pair_location,A1=df2$effect_allele,
+                 A2=df2$other_allele,beta=df2$beta,se=df2$standard_error,p=df2$p_value)
+  
+  dfall=merge(df1,df2,by="SNP")
+  dfall = dfall[!duplicated(dfall$SNP),]
+  
+  dfall = dfall %>% filter((A1.x==A1.y&A2.x==A2.y)|(A1.x==A2.y&A2.x==A1.y)) 
+  dfall = dfall %>% mutate(beta.y = ifelse(A1.x==A1.y,beta.y,-beta.y))
+  
+  
+  dfall$VAR1 = dfall$se.x^2
+  dfall$VAR2 =dfall$se.y^2
+  dfall = dfall[dfall$VAR1!=0 & dfall$VAR2!=0 ,]
+  cdf1 =data.frame(beta=dfall$beta.x,varbeta=dfall$VAR1,snp=dfall$SNP,MAF=dfall$MAF,N=dfall$N)
+  cdf2= data.frame(beta=dfall$beta.y,varbeta=dfall$VAR2,snp=dfall$SNP)
+  
+  cdf1=na.omit(cdf1)
+  cdf2=na.omit(cdf2)
+  
+  cdf1 = as.list(cdf1)
+  cdf2 = as.list(cdf2)
+
+  cdf1$type = "quant"#quant
+  cdf2$type = "cc"#quant
+  
+  res = coloc.abf(cdf1,cdf2,p1=1e-4,p2=1e-4,p12=1e-5)
+  color_result1=res$summary
+  color_result2=res$results
+  write.table(color_result2,file = paste0(i,"_color_result2.txt"),row.names = F,quote = F,sep = "\t")
+  
+  colorsnpdf <- color_result2 %>% dplyr::arrange(desc(SNP.PP.H4))
+  colorsnp=colorsnpdf[1,1]
+  
+  result=rbind(result,cbind(id=i,gene=gene,nsnps=color_result1[[1]],
+                            topsnp=topsnp,
+                            colorsnp=colorsnp,
+                            PP.H0.abf=color_result1[[2]],
+                            PP.H1.abf=color_result1[[3]],
+                            PP.H2.abf=color_result1[[4]],
+                            PP.H3.abf=color_result1[[5]],
+                            PP.H4.abf=color_result1[[6]]))
+  
+}
+#Single-Cell RNA Sequencing
+library(limma)
+library(Seurat)
+library(dplyr)
+
+cc=c("SR1","SR2","SR3","SR4","SR5")
+sample_list <- list()
+
+for (i in cc){
+  myname<- Read10X(data.dir = i)
+  colnames(myname) <- paste(i, colnames(myname), sep = '-')
+  mySeruat<- CreateSeuratObject(counts = myname,project = paste0("Sample", i), min.cells = 3, min.features = 200, names.delim = "_")
+  sample_list[[i]] <- mySeruat
+}
+
+for (i in 1:length(sample_list)) {
+  
+  sample_list[[i]][["percent.mt"]] <- PercentageFeatureSet(object = sample_list[[i]], pattern = "^MT-")
+  
+  sample_list[[i]]<- subset(x = sample_list[[i]], subset = nFeature_RNA > 50 & percent.mt < 5)    
+  
+  sample_list[[i]]<- NormalizeData(object = sample_list[[i]], normalization.method = "LogNormalize", scale.factor = 10000)
+  sample_list[[i]]<- FindVariableFeatures(object = sample_list[[i]], selection.method = "vst", nfeatures = 1500)
+}
+
+anchors <- FindIntegrationAnchors(object.list = sample_list,k.anchor = 20)
+integrated_data <- IntegrateData(anchorset = anchors)
+ 
+VlnPlot(integrated_data, 
+        features = c("nFeature_RNA",
+                     "nCount_RNA", 
+                     "percent.mt"),
+        ncol = 3,pt.size = 0, group.by = "orig.ident")
+seuratdta=ScaleData(integrated_data)                    
+seuratdta=RunPCA(object= seuratdta,npcs = 30,pc.genes=VariableFeatures(object = seuratdta))    
+
+seuratdta<- JackStraw(object =seuratdta, num.replicate = 100)
+seuratdta <- ScoreJackStraw(object = seuratdta, dims = 1:20)
+pdf("pca1.pdf",8,8)
+JackStrawPlot(object = seuratdta, dims = 1:20)
+dev.off()
+pdf("pca2.pdf",8,8)
+ElbowPlot(seuratdta,ndims = 30)
+dev.off()
+seuratdta<- FindNeighbors(object = seuratdta, dims = 1:30)
+seuratdta<- FindClusters(object = seuratdta, resolution = 0.5)
+saveRDS(seuratdta,"SR-pAF-seuratdta_pca.rds")
+
+# UMAP分析
+seuratdta <- RunUMAP(seuratdta, 
+                    dims = 1:20)
+p5 <- DimPlot(object = seuratdta, 
+              reduction = "umap", 
+              group.by = "Group",
+              dims = c(1,2),
+              shuffle = TRUE,
+              label = TRUE,
+              label.size = 4,
+              label.color = "black",
+              label.box = TRUE,
+              sizes.highlight = 1)
+p5
+
+p6 <- DimPlot(object = seuratdta, 
+              reduction = "umap", 
+              group.by = "Phase",
+              dims = c(1,2),
+              shuffle = TRUE,
+              label = TRUE,
+              label.size = 4,
+              label.color = "black",
+              label.box = TRUE,
+              sizes.highlight = 1)
+p6
+FeaturePlot(seuratdta, 
+            reduction = "umap", 
+            features = "ANXA4")
+
+UMAPPlot(object = seuratdta,
+         group.by = "seurat_clusters",
+         pt.size = 2, 
+         label = TRUE)
+save(seuratdta, file = "all_cluster.Rda")
+
+rm(list = ls())
+library(tidyverse)
+library(reshape2)
+library(patchwork)
+library(Seurat)
+
+# 创建一个包含单细胞亚群及其标记基因的向量
+cell_type_markers <- list(
+  Cardiomyocytes = c("TTN", "MYH7", "MYH6", "TNNT2", "ACTC1", "MYL7", "MYBPC3", "TNNI3", "NPPB"),
+  Fibroblasts = c("DCN", "GSN", "LUM", "FBLN1", "COL1A2", "POSTN", "COL3A1", "COL1A1"),
+  EndothelialCells = c("VWF", "IFI27", "PECAM1", "MGP", "CD36", "ENG", "CDH5"),
+  Pericytes = c("RGS5", "ABCC9", "PDGFRB", "CSPG4", "NOTCH3"),
+  SmoothMuscleCells = c("ACTA2", "CALD1", "MYH11", "MYO1B", "RGS5", "MYLK", "TAGLN", "CNN1"),
+  Macrophages = c("CD80", "CD86", "iNOS", "MHCII", "TNF", "IL1B", "IL-6", "NOS2", "CCL2","CD163", "CD206", "CD301", "Dectin-1", "PDL2", "Fizz1", "PPARG", "ARG1", "CD115"，"FN1", "COL3A1", "COL1A2", "FBN1", "MMP2"),
+  Monocytes = c("LY6C2", "SPN", "S100A8", "CD14", "LYZ"),
+  Neutrophils = c("CSF3R", "S100A8", "CXCL3", "S100A9", "ELANE"),
+  Lymphocytes = c("NKG7", "CCL5", "IL7R", "CD3D", "CD3E"),
+  BCells = c("CD69", "CD79A", "MS4A1", "CD19"),
+  MesothelialCells = c("MSLN", "WT1", "UPK3B"),
+  Adipocytes = c("ADIPOQ", "FABP4", "PLIN1")
+)
+
+print(cell_type_markers)
+integrated_data <- seuratdta
+head(rownames(integrated_data))
+
+features_in_integrated_data <- rownames(integrated_data)
+# 
+for (cell_type in names(cell_type_markers)) {
+  valid_genes <- cell_type_markers[[cell_type]][cell_type_markers[[cell_type]] %in% features_in_integrated_data]
+  cat(cell_type, ": ", length(valid_genes), "valid genes\n")
+}
+
+for (cell_type in names(cell_type_markers)) {
+  
+  features <- cell_type_markers[[cell_type]]
+  
+  
+  valid_features <- features[features %in% rownames(integrated_data)]
+  
+  
+  if (length(valid_features) < 1) {
+    warning(paste("Skipping", cell_type, ": No valid features found in object."))
+    next
+  }
+  
+  
+  if (length(valid_features) < 2) {
+    warning(paste(cell_type, "has only", length(valid_features), "valid features. Score may be unreliable."))
+  }
+  
+  
+  integrated_data <- AddModuleScore(
+    integrated_data,
+    features = list(valid_features),
+    name = cell_type,
+    ctrl = 5,  # 如果数据小，试 ctrl=1 以防随机基因不够
+    search = TRUE
+  )
+}
+
+
+head(integrated_data@meta.data[, grep("1$", colnames(integrated_data@meta.data))])
+
+score_columns <- grep("1$", colnames(integrated_data@meta.data), value = TRUE)
+
+integrated_data$cell_type <- apply(integrated_data@meta.data[, score_columns], 1, function(x) {
+  if (all(is.na(x)) || length(x) == 0) return("Unknown")
+  max_idx <- which.max(x)
+  if (x[max_idx] > 0) {  # 阈值 >0；如果太多 Unknown，试 > -0.5 或移除
+    gsub("1$", "", score_columns[max_idx])
+  } else {
+    "Unknown"
+  }
+})
+
+Idents(integrated_data) <- "cell_type"
+
+
+table(integrated_data$cell_type)
+library(ggplot2)
+
+pdf(file = "UMAP.1.pdf", width = 15, height = 15)
+DimPlot(integrated_data, reduction = "umap", group.by = "cell_type", label = TRUE, repel = TRUE) + 
+  ggtitle("UMAP with Cell Type Annotations")
+dev.off()
+
+VlnPlot(integrated_data, features = c("TNNT2", "DCN", "VWF", "S100A8"), group.by = "cell_type", pt.size = 0)
+
+markers <- FindAllMarkers(integrated_data, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+top_markers <- markers %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC)
+DoHeatmap(integrated_data, features = unique(top_markers$gene)) + NoLegend()
+
+pdf(file = "UMAP-ANXA4.pdf", width = 15, height = 15)
+FeaturePlot(integrated_data, features = "ANXA4", order = TRUE) + scale_color_viridis_c()
+dev.off()
+if (!"cell_type" %in% colnames(integrated_data@meta.data)) {
+  stop("cell_type column not found in metadata. Run the previous annotation steps first.")
+}
+
+integrated_data$group <- ifelse(integrated_data$orig.ident %in% c("AF6", "AF8"), "blood",
+                                ifelse(integrated_data$orig.ident %in% c("AF7", "AF9"), "endocardium",
+                                              ifelse(integrated_data$orig.ident %in% c("AF1","AF2","AF3","AF4","pAF2","pAF3","pAF4","pAF5","MR1","MR3","MR4","MR5","MR6","MR7"), "myocardium", NA)))
+
+saveRDS(integrated_data,"integrated.AF.rds")
+pdf(file = "UMAP.AF.new.pdf", width = 18, height = 18)
+DimPlot(integrated_data, reduction = "umap", group.by = "celltype.group", 
+        label = FALSE, repel = FALSE) + 
+  ggtitle("UMAP with Integrated Cell Type Annotations") +
+  guides(color = guide_legend(ncol = 1, 
+                              override.aes = list(size = 3))) +
+  theme(legend.text = element_text(size = 8))  # 减小图例文字大小
+dev.off()
+
+if (!all(c("seurat_clusters", "cell_type") %in% colnames(integrated_data@meta.data))) {
+  stop("Required columns (seurat_clusters and cell_type) not found in metadata. Run previous annotation steps first.")
+}
+
+library(dplyr)
+
+get_mode <- function(x) {
+  uniq_x <- unique(x)
+  uniq_x[which.max(tabulate(match(x, uniq_x)))]
+}
+
+clusterAnn <- integrated_data@meta.data %>%
+  group_by(seurat_clusters) %>%
+  summarise(labels = get_mode(cell_type)) %>%  # 用 celltype.group 的 mode
+  as.data.frame()
+clusterAnn <- cbind(id = clusterAnn$seurat_clusters, clusterAnn[, "labels", drop = FALSE])  # 添加 id 列
+colnames(clusterAnn) <- c("id", "labels")  # 标准化列名
+
+write.table(clusterAnn, file = "clusterAnn.blood.txt", quote = FALSE, sep = "\t", row.names = FALSE)
+
+cellAnn <- integrated_data$cell_type
+cellAnnOut <- data.frame(id = rownames(integrated_data@meta.data), labels = cellAnn)  # 用细胞 ID 和 celltype.group
+
+
+write.table(cellAnnOut, file = "cellAnn.blood.txt", quote = FALSE, sep = "\t", row.names = FALSE)
+expMatrix <- GetAssayData(integrated_data, slot = "data")
+expMatrix <- as.matrix(expMatrix)  # 将提取到的数据转换为矩阵格式
+
+expMatrix <- cbind(id = rownames(expMatrix), expMatrix)
+
+write.table(expMatrix, file = "expMatirx.blood.txt", quote = FALSE, sep = "\t", row.names = FALSE)
+
+expMatrix <- read.table("expMatirx.blood.txt", header = TRUE, sep = "\t")
+
+if ("ANXA4" %in% expMatrix$id) {
+  cat("ANXA4 基因存在于 expMatirx.txt 中。\n")
+} else {
+  cat("ANXA4 基因不在 expMatirx.txt 中。\n")
+}
+
+
+# 
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+if (!require("scDblFinder"))
+  BiocManager::install("scDblFinder")
+library(scDblFinder)
+library(Seurat)
+
+# 
+DefaultAssay(integrated_data) <- "RNA"
+
+# scDblFinder
+integrated_data <- scDblFinder(integrated_data, 
+                               assay = "RNA", 
+                               clusters = "seurat_clusters", 
+                               samples = "orig.ident")       
+
+# 
+print("Doublet prediction results:")
+print(table(integrated_data$scDblFinder.class))
+
+# 
+summary(integrated_data$scDblFinder.score)
+
+# 
+VlnPlot(integrated_data, features = "scDblFinder.score", group.by = "orig.ident") +
+  ggtitle("Doublet Score Distribution by Sample")
+
+# 
+integrated_data$is_doublet <- integrated_data$scDblFinder.class == "doublet"
+DimPlot(integrated_data, group.by = "is_doublet", cols = c("grey", "red")) +
+  ggtitle("Predicted Doublets on UMAP")
+
+# 
+suspected_cells <- WhichCells(integrated_data, idents = "Cardiomyocytes_blood")
+doublet_status <- integrated_data$scDblFinder.class[suspected_cells]
+cat("Doublet prediction for Cardiomyocytes_blood cells:\n")
+print(data.frame(Cell = suspected_cells, 
+                 Prediction = doublet_status,
+                 Score = integrated_data$scDblFinder.score[suspected_cells]))
+
+# 
+integrated_data_clean <- subset(integrated_data, 
+                                cells = WhichCells(integrated_data, 
+                                                   expression = scDblFinder.class == "singlet"))
+
+
+all_impossible_cells <- unique(unlist(lapply(other_impossible, function(x) {
+  WhichCells(integrated_data, idents = x)
+})))
+
+integrated_data_clean <- subset(integrated_data, cells = setdiff(WhichCells(integrated_data), all_impossible_cells))
+
+table(seuratdta$orig.ident)[cc]
+# 1) ID
+blood_ids       <- c("AF6", "AF8")
+endocardium_ids <- c("AF7", "AF9")
+
+all_ids <- c("AF1","AF2","AF3","AF4","AF6","AF7","AF8","AF9",
+             "pAF2","pAF3","pAF4","pAF5",
+             "MR1","MR3","MR4","MR5","MR6","MR7")
+
+# 2) 
+missing <- setdiff(all_ids, unique(seuratdta$orig.ident))
+if (length(missing) > 0) {
+  warning(sprintf("以下样本在对象中未找到：%s", paste(missing, collapse = ", ")))
+}
+
+# 3) tissue（blood / endocardium / myocardium）
+seuratdta$tissue <- "myocardium"
+seuratdta$tissue[seuratdta$orig.ident %in% blood_ids]       <- "blood"
+seuratdta$tissue[seuratdta$orig.ident %in% endocardium_ids] <- "endocardium"
+seuratdta$tissue <- factor(seuratdta$tissue,
+                           levels = c("blood","endocardium","myocardium"))
+seuratdta$celltype_group <- paste(seuratdta$cell_type, seuratdta$tissue, sep = "_")
+
+seuratdta$celltype_group <- factor(
+  seuratdta$celltype_group,
+  levels = unique(seuratdta$celltype_group)  # 也可自定义顺序
+)
+
+table(seuratdta$celltype_group)
+library(SingleR)
+library(celldex)
+
+#hpca.se<-HumanPrimaryCellAtlasData()
+#hpca.se
+
+saveRDS(seuratdta,"SRseuratdta.rds")
+
+seuratdta<-readRDS(file = "seuratdta_pca.rds")
+
+hpca.se<-readRDS(file = "hpca.se.rds")
+seurat_counts <- GetAssayData(seuratdta, slot = "data")
+clusterdt<-seuratdta@meta.data$seurat_clusters
+seuratdta_label <- SingleR(test = seurat_counts, 
+                           ref = hpca.se, 
+                           labels = hpca.se$label.main,
+                           clusters = clusterdt
+)
+
+
+new.cluster.ids=seuratdta_label$pruned.labels
+names(new.cluster.ids) <- levels(seuratdta)
+seuratdta<- RenameIdents(seuratdta, new.cluster.ids)
+new.cluster.ids
+seuratdta <- RunTSNE(object = seuratdta, dims = 1:20)
+tsneplot2<-TSNEPlot(seuratdta,label = TRUE, pt.size = 1.5)
+pdf("tse12.pdf")
+print(tsneplot2)
+dev.off()
+
+seuratdta$ID=Idents(seuratdta)
+table(seuratdta$orig.ident)
+
+seuratdta$group = ifelse(seuratdta$orig.ident %in% c("SamplepAF1", "SamplepAF2", "SamplepAF3", "SamplepAF4", "SamplepAF5"), "pAF", "eAF") 
+seuratdta$group=ifelse(seuratdta$orig.ident%in%c("SampleSR1","SampleSR2","SampleSR3","SampleSR4","SampleSR5"),"SR","AF")
+
+seuratdta$celltype.group <- paste(seuratdta$ID, seuratdta$group, sep = "_")
+Idents(seuratdta) <- "celltype.group"
+table(seuratdta$celltype.group) 
+saveRDS(seuratdta,"seuratdta_final.rds")
+seuratdta=readRDS(file = "seuratdta_final.rds")
+
+diffgene=FindMarkers(seuratdta,ident.1 = "Macrophages_AF",ident.2 = "Macrophages_SR", 
+                     min.pct = 0.25,logfc.threshold =0.5)
+#diffgene <- FindMarkers(seuratdta,ident.1 = "NK_cell",ident.2 = "Monocyte",min.pct = 0.25,logfc.threshold =0.5)
+siggene=diffgene[(abs(as.numeric(as.vector(diffgene$avg_log2FC)))>0.5 & as.numeric(as.vector(diffgene$p_val_adj))<0.05),]
+siggene1=data.frame(id=row.names(siggene),siggene)
+write.table(siggene1,"Macrophages_gene.txt",sep="\t",row.names=F,quote=F)
+pdf("Monocyte.pdf")
+VlnPlot(object = seuratdta, features = "ANXA4",idents=c("Macrophages_AF","Macrophages_SR"))
+dev.off()
+
+
+pdf("tse18.pdf")
+VlnPlot(object = seuratdta, features =c("IL1R2"))
+dev.off()
+
+VlnPlot(object = seuratdta, features ="IL1R2")
+VlnPlot(object = seuratdta, features =c("SERPINB10","JAKMIP2","SEMA3C"),idents=c("NK_cell_OA","NK_cell_Normal"))
+
+diffgene <- FindMarkers(seuratdta, ident.1 = "Macrophages_AF", ident.2 = "Macrophages_SR", min.pct = 0.25, logfc.threshold = 0)
+# 
+siggene1 <- data.frame(id = row.names(diffgene), diffgene)
+anxa4_info <- siggene1[rownames(siggene1) == "ANXA4", ]
+print(anxa4_info)
+VlnPlot(object = seuratdta, features = "ANXA4", idents = c("Macrophages_AF", "Macrophages_SR"))
+
+library(CellChat)
+library(readxl)
+library(dplyr)
+library(Seurat)
+library(CellChat)
+library(Matrix)  # 处理稀疏矩阵的关键包
+library(Seurat) 
+setwd("/home/gyzqy/MR+SR")
+
+"ANXA4" %in% rownames(seuratdta[["RNA"]])
+
+cnt_layers <- grep("^counts\\.", Layers(seuratdta[["RNA"]]), value = TRUE)
+
+raw_list <- lapply(cnt_layers, \(ly) LayerData(seuratdta[["RNA"]], ly))
+all_genes <- unique(unlist(lapply(raw_list, rownames)))
+
+pad_reorder <- function(mat, genes) {
+  miss <- setdiff(genes, rownames(mat))
+  if (length(miss) > 0) {
+    mat <- rbind(
+      mat,
+      Matrix(0, nrow = length(miss), ncol = ncol(mat),
+             sparse = TRUE, dimnames = list(miss, colnames(mat)))
+    )
+  }
+  mat[genes, , drop = FALSE]
+}
+
+merged_counts <- do.call(cbind, lapply(raw_list, pad_reorder, genes = all_genes))
+
+rna <- seuratdta[["RNA"]]
+
+lyname <- "counts_merged"
+mat <- merged_counts
+
+rna@layers[[lyname]] <- mat
+
+rna@cells[[lyname]] <- seq_len(ncol(mat))
+rna@features[[lyname]] <- seq_len(nrow(mat))
+
+
+rna@default <- match(lyname, names(rna@layers))
+
+seuratdta[["RNA"]] <- rna
+validObject(seuratdta)
+
+library(Seurat)
+library(CellChat)
+library(Matrix)
+library(dplyr)
+
+get_counts_merged <- function(seu, assay = "RNA", layer = "counts_merged") {
+  stopifnot(assay %in% Assays(seu))
+  m <- LayerData(seu[[assay]], layer = layer)
+  if (is.null(m) || nrow(m) == 0) stop("未找到 RNA/ counts_merged 矩阵，请检查 layer 名称和 Seurat 版本（v5/Assay5）")
+  m
+}
+
+counts <- get_counts_merged(seuratdta, assay = "RNA", layer = "counts_merged")
+labels <- seuratdta$celltype_group
+names(labels) <- colnames(seuratdta)
+
+gene <- "ANXA4"
+stopifnot(gene %in% rownames(counts))
+gexp <- as.numeric(counts[gene, ])
+names(gexp) <- colnames(counts)
+
+cells_high <- c(); cells_low <- c()
+for (lab in unique(labels)) {
+  idx <- names(labels[labels == lab])
+  gx  <- gexp[idx]
+  q1l <- quantile(gx, 0.25, na.rm = TRUE)
+  q3l <- quantile(gx, 0.75, na.rm = TRUE)
+  cells_high <- c(cells_high, names(gx)[gx >= q3l])
+  cells_low  <- c(cells_low,  names(gx)[gx <= q1l])
+}
+cat("ANXA4 高组：", length(cells_high), "；低组：", length(cells_low), "\n")
+
+split_by_quantile_disjoint <- function(gx, p = 0.25) {
+  ql <- quantile(gx, p, na.rm = TRUE)
+  qh <- quantile(gx, 1 - p, na.rm = TRUE)
+  # 
+  low  <- names(gx)[gx < ql]
+  high <- names(gx)[gx > qh]
+  # 
+  if (length(low) == 0 || length(high) == 0) {
+    ord <- order(gx, na.last = NA)
+    k <- max(1, floor(length(gx) * p))
+    low  <- names(gx)[head(ord, k)]
+    high <- names(gx)[tail(ord, k)]
+  }
+  list(low = low, high = high)
+}
+
+stratified_split <- function(vals, groups, p = 0.25, min_cells_per_group = 2L, verbose = TRUE) {
+  stopifnot(length(vals) == length(groups))
+  
+  keep <- !is.na(vals) & !is.na(groups)
+  vals <- vals[keep]
+  groups <- groups[keep]
+  
+  
+  res_low  <- character(0)
+  res_high <- character(0)
+  
+  
+  skipped <- list()
+  
+  for (g in unique(groups)) {
+    idx <- which(groups == g)
+    if (length(idx) < min_cells_per_group) {
+      skipped[[g]] <- sprintf("too few cells: %d < %d", length(idx), min_cells_per_group)
+      next
+    }
+    
+    gx <- vals[idx]
+    names(gx) <- names(vals)[idx]
+    
+    sp <- split_by_quantile_disjoint(gx, p = p)
+    
+    n_low  <- length(sp$low)
+    n_high <- length(sp$high)
+    
+    if (n_low == 0L && n_high == 0L) {
+      skipped[[g]] <- "both empty after split"
+      next
+    }
+    
+    # 
+    if (n_low == 0L || n_high == 0L) {
+      skipped[[g]] <- sprintf("one side empty: low=%d, high=%d", n_low, n_high)
+    }
+    
+    res_low  <- c(res_low,  sp$low)
+    res_high <- c(res_high, sp$high)
+  }
+  
+  if (verbose) {
+    if (length(skipped)) {
+      msg <- paste(sprintf("- %s: %s", names(skipped), unlist(skipped)), collapse = "\n")
+      message("Skipped subtypes due to constraints:\n", msg)
+    } else {
+      message("No subtypes skipped.")
+    }
+    message(sprintf("Collected cells: low=%d, high=%d", length(res_low), length(res_high)))
+  }
+  list(low = res_low, high = res_high, skipped = skipped)
+}
+
+counts <- LayerData(seuratdta[["RNA"]], layer = "counts_merged")
+gene <- "ANXA4"
+gexp <- setNames(as.numeric(counts[gene, ]), colnames(counts))
+labels <- setNames(seuratdta$celltype_group, colnames(seuratdta))
+
+cells_high <- c(); cells_low <- c()
+for (lab in unique(labels)) {
+  idx <- names(labels[labels == lab])
+  res <- split_by_quantile_disjoint(gexp[idx], p = 0.25)
+  cells_low  <- c(cells_low,  res$low)
+  cells_high <- c(cells_high, res$high)
+}
+
+
+overlap <- intersect(cells_high, cells_low)
+if (length(overlap) > 0) {
+  message("发现重叠细胞：", length(overlap), " 个，已从低组移除")
+  cells_low <- setdiff(cells_low, overlap)
+}
+
+
+stratified_balance <- function(cells_high, cells_low, labels_vec, min_per_label = 10, seed = 123) {
+  set.seed(seed)
+  lab_high <- labels_vec[cells_high]; lab_low <- labels_vec[cells_low]
+  labs <- union(names(table(lab_high)), names(table(lab_low)))
+  keep_high <- c(); keep_low <- c()
+  for (lab in labs) {
+    ch <- names(lab_high[lab_high == lab]); cl <- names(lab_low[lab_low == lab])
+    n <- min(length(ch), length(cl))
+    if (n >= min_per_label) {
+      keep_high <- c(keep_high, sample(ch, n))
+      keep_low  <- c(keep_low,  sample(cl, n))
+    }
+  }
+  list(high = keep_high, low = keep_low)
+}
+
+balanced <- stratified_balance(cells_high, cells_low, labels, min_per_label = 10)
+cells_high_bal <- balanced$high
+cells_low_bal  <- balanced$low
+run_cellchat_counts_merged <- function(seuratdta, cells_subset, min_cells = 10, project_name = "CellChat") {
+  library(CellChat)
+  library(Matrix)
+  message("获取合并层数据...")
+  if (!"counts_merged" %in% Layers(seuratdta[["RNA"]])) {
+    stop("Seurat对象中未找到'counts_merged'层。请确保已按照之前的代码创建该层")
+  }
+  
+  data.input <- LayerData(seuratdta, assay = "RNA", layer = "counts_merged")
+  
+  valid_cells <- intersect(cells_subset, colnames(data.input))
+  if (length(valid_cells) == 0) {
+    stop("没有任何细胞存在于表达矩阵中。请检查细胞ID是否匹配")
+  }
+  
+  if (length(valid_cells) < length(cells_subset)) {
+    warning("过滤掉了 ", length(cells_subset) - length(valid_cells), 
+            " 个不存在于表达矩阵中的细胞")
+  }
+  
+  data.input <- data.input[, valid_cells, drop = FALSE]
+  
+  
+  meta <- seuratdta[[]][valid_cells, , drop = FALSE]
+  
+  cell_type_col <- "celltype_group"
+  if (!cell_type_col %in% colnames(meta)) {
+    stop("在元数据中找不到列：'", cell_type_col, "'。可用列：",
+         paste(colnames(meta), collapse = ", "))
+  }
+  
+  message("创建CellChat对象...")
+  cellchat <- createCellChat(
+    object = data.input,
+    meta = meta,
+    group.by = cell_type_col
+  )
+  
+  try({
+    if ("project.name" %in% slotNames(cellchat)) {
+      cellchat@project.name <- project_name
+    } else if ("projectName" %in% slotNames(cellchat)) {
+      cellchat@projectName <- project_name
+    } else {
+      message("当前CellChat版本不支持设置项目名称")
+    }
+  }, silent = TRUE)
+  
+  message("加载CellChat数据库...")
+  CellChatDB <- CellChatDB.human
+  cellchat@DB <- CellChatDB
+  
+  message("设置细胞身份...")
+  cellchat <- setIdent(cellchat, ident.use = cell_type_col)
+  
+  message(">> 数据子集化")
+  cellchat <- subsetData(cellchat)
+  
+  message(">> 识别过表达基因")
+  cellchat <- identifyOverExpressedGenes(cellchat)
+  
+  message(">> 识别过表达相互作用")
+  cellchat <- identifyOverExpressedInteractions(cellchat)
+  
+  message(">> 计算通讯概率 (敏感模式)")
+  cellchat <- computeCommunProb(cellchat,
+                                type = "truncatedMean",
+                                trim = 0.1,
+                                population.size = TRUE)
+  
+  message(">> 过滤微弱信号")
+  cellchat <- filterCommunication(cellchat, min.cells = min_cells)
+  
+  message(">> 通路水平分析")
+  cellchat <- computeCommunProbPathway(cellchat)
+  
+  message(">> 网络聚合")
+  cellchat <- aggregateNet(cellchat)
+  
+  message("分析完成! 返回CellChat对象")
+  return(cellchat)
+}
+cellchat_high <- run_cellchat_counts_merged(seuratdta, 
+                                            cells_high_bal,
+                                            min_cells = 1, 
+                                            project_name = "ANXA4_High")
+
+cellchat_low <- run_cellchat_counts_merged(seuratdta, 
+                                           cells_low_bal,
+                                           min_cells = 1, 
+                                           project_name = "ANXA4_Low")
+
+saveRDS(cellchat_low,"ANXA4_low_cellchat_objects.rds")
+
+library(CellChat)
+cellchat_low <- cellchat_ANXA4_low
+object.list <- list(High = cellchat_high, Low = cellchat_low)
+cellchat_merged <- mergeCellChat(object.list, add.names = names(object.list))
+
+library(dplyr)
+
+df_high <- subsetCommunication(cellchat_ANXA4_high)  # High
+df_low  <- subsetCommunication(cellchat_ANXA4_low)   # Low
+
+is_mono <- function(df) grepl("^Lymphocytes_", df$source) | grepl("^Lymphocytes_", df$target)
+dfh_mono <- df_high %>% filter(is_mono(.))
+dfl_mono <- df_low  %>% filter(is_mono(.))
+library(dplyr)
+library(tidyr)
+inter_col <- if ("interaction_name_2" %in% names(df_high)) {
+  "interaction_name_2"
+} else if ("interaction_name" %in% names(df_high)) {
+  "interaction_name"
+} else {
+  stop("Cannot find interaction column in df_high. Expected 'interaction_name_2' or 'interaction_name'.")
+}
+
+if (!(inter_col %in% names(df_low))) {
+  if ("interaction_name_2" %in% names(df_low)) {
+    df_low <- dplyr::rename(df_low, !!inter_col := interaction_name_2)
+  } else if ("interaction_name" %in% names(df_low)) {
+    df_low <- dplyr::rename(df_low, !!inter_col := interaction_name)
+  } else {
+    stop("Cannot find interaction column in df_low. Expected 'interaction_name_2' or 'interaction_name'.")
+  }
+}
+
+is_mono <- function(df) grepl("^Lymphocytes_", df$source) | grepl("^Lymphocytes_", df$target)
+dfh_mono <- df_high %>% filter(is_mono(.))
+dfl_mono <- df_low  %>% filter(is_mono(.))
+
+key_cols <- c(inter_col, "pathway_name", "source", "target")
+library(dplyr)
+library(tidyr) 
+
+mm <- dfh_mono %>%
+  select(all_of(key_cols), prob_high = prob) %>%
+  full_join(
+    dfl_mono %>% select(all_of(key_cols), prob_low = prob),
+    by = key_cols
+  ) %>%
+  replace_na(list(prob_high = 0, prob_low = 0)) %>%
+  mutate(
+    diff_prob = prob_high - prob_low,
+    direction = ifelse(diff_prob > 0, "High > Low",
+                       ifelse(diff_prob < 0, "Low > High", "No change"))
+  ) %>%
+  arrange(desc(abs(diff_prob)))
+
+head(mm %>% select(all_of(key_cols), prob_high, prob_low, diff_prob, direction), 20)
+mm_top20_raw <- mm %>%
+  select(all_of(key_cols), prob_high, prob_low, diff_prob, direction) %>%
+  slice_head(n = 20)
+
+readr::write_csv(mm_top20_raw, "Lymphocytes_top20_table.csv")
+pathway_diff <- mm %>%
+  group_by(pathway_name) %>%
+  summarise(
+    sum_prob_high = sum(prob_high, na.rm = TRUE),
+    sum_prob_low  = sum(prob_low,  na.rm = TRUE),
+    diff_sum_prob = sum_prob_high - sum_prob_low,
+    n = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(abs(diff_sum_prob)))
+head(pathway_diff, 15)
+
+top_pathways <- pathway_diff %>% 
+  slice_max(order_by = abs(diff_sum_prob), n = 15) %>%
+  pull(pathway_name)
+
+mm_top_pathways <- mm %>% 
+  filter(pathway_name %in% top_pathways)
+
+ggplot(mm_top_pathways, aes(x = source, y = target)) +
+  geom_point(aes(size = abs(diff_prob), color = diff_prob), alpha = 0.8) +
+  scale_color_gradient2(
+    low = "#377eb8", 
+    mid = "grey90", 
+    high = "#e41a1c",
+    name = "Δ prob\n(High - Low)"
+  ) +
+  scale_size_continuous(
+    range = c(1, 8),
+    name = "|Δ prob|"
+  ) +
+  facet_wrap(~ pathway_name, scales = "free", ncol = 3) +
+  theme_bw(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+    axis.text.y = element_text(size = 8),
+    strip.text = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  ) +
+  labs(
+    title = "Lymphocytes-Related Pathway Differences: ANXA4 High vs Low",
+    x = "Source Cell Type",
+    y = "Target Cell Type"
+  )
+library(dplyr)
+library(tidyr)
+library(pheatmap)
+
+topN <- 20
+mm_top <- mm %>%
+  slice_max(order_by = abs(diff_prob), n = topN)
+
+
+mm_top <- mm_top %>%
+  mutate(row_lab = paste0(source, " → ", target, " | ", interaction_name_2))
+
+mat_prob <- mm_top %>%
+  select(row_lab, High = prob_high, Low = prob_low) %>%
+  distinct() %>%
+  as.data.frame()
+
+rownames(mat_prob) <- mat_prob$row_lab
+mat_prob$row_lab <- NULL
+
+eps <- 1e-12
+mat_log <- log10(as.matrix(mat_prob) + eps)
+
+anno_row <- mm_top %>%
+  select(row_lab, Pathway = pathway_name) %>%
+  distinct() %>%
+  as.data.frame()
+rownames(anno_row) <- anno_row$row_lab
+anno_row$row_lab <- NULL
+
+pheatmap(
+  mat_log,
+  scale = "row",                 
+  cluster_rows = TRUE,
+  cluster_cols = FALSE,
+  color = colorRampPalette(c("#377eb8","white","#e41a1c"))(100),
+  annotation_row = anno_row,     # 标注通路
+  main = paste0("Lymphocytes-related LR (Top ", topN, "): High vs Low (log10 probability)")
+)、
+
+mat_st <- mm %>%
+  group_by(source, target) %>%
+  summarise(diff = sum(diff_prob, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = target, values_from = diff, values_fill = 0) %>%
+  as.data.frame()
+
+rownames(mat_st) <- mat_st$source
+mat_st$source <- NULL
+
+pheatmap(
+  as.matrix(mat_st),
+  cluster_rows = TRUE,
+  cluster_cols = TRUE,
+  color = colorRampPalette(c("#377eb8","white","#e41a1c"))(100),
+  main = "Lymphocytes-related: source–target cell Δ prob (High − Low, aggregated by cell pairs)"
+)
+topN <- 20
+mm_top <- mm %>%
+  slice_max(order_by = abs(diff_prob), n = topN)
+
+mm_top <- mm_top %>%
+  mutate(row_lab = paste0(source, " -> ", target, " | ", interaction_name_2))
+
+mat_prob <- mm_top %>%
+  select(row_lab, High = prob_high, Low = prob_low) %>%
+  distinct() %>%
+  as.data.frame()
+
+rownames(mat_prob) <- mat_prob$row_lab
+mat_prob$row_lab <- NULL
+
+eps <- 1e-12
+mat_log <- log10(as.matrix(mat_prob) + eps)
+
+anno_row <- mm_top %>%
+  select(row_lab, Pathway = pathway_name) %>%
+  distinct() %>%
+  as.data.frame()
+rownames(anno_row) <- anno_row$row_lab
+anno_row$row_lab <- NULL
+
+pdf("Lymphocytes_LR_top20_heatmap.pdf", width = 12, height = 12)
+pheatmap(
+  mat_log,
+  scale = "row",
+  cluster_rows = TRUE,
+  cluster_cols = FALSE,
+  color = colorRampPalette(c("#377eb8","white","#e41a1c"))(100),
+  annotation_row = anno_row,
+  fontsize_row = 8,
+  main = paste0("Lymphocytes-related LR (Top ", topN, "): High vs Low (log10 probability)")
+)
+dev.off()
+
+cat("Heatmap 1 saved to: Lymphocytes_LR_top20_heatmap.pdf\n")
+mat_st <- mm %>%
+  group_by(source, target) %>%
+  summarise(diff = sum(diff_prob, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = target, values_from = diff, values_fill = 0) %>%
+  as.data.frame()
+
+rownames(mat_st) <- mat_st$source
+mat_st$source <- NULL
+
+row_sums <- rowSums(abs(as.matrix(mat_st)))
+col_sums <- colSums(abs(as.matrix(mat_st)))
+
+mat_st_filtered <- mat_st[row_sums > 0, col_sums > 0, drop = FALSE]
+
+cat("Original dimensions:", nrow(mat_st), "x", ncol(mat_st), "\n")
+cat("Filtered dimensions:", nrow(mat_st_filtered), "x", ncol(mat_st_filtered), "\n")
+
+pdf("Lymphocytes_source_target_heatmap.pdf", width = 14, height = 10)
+pheatmap(
+  as.matrix(mat_st_filtered),
+  cluster_rows = TRUE,
+  cluster_cols = TRUE,
+  color = colorRampPalette(c("#377eb8","white","#e41a1c"))(100),
+  fontsize = 9,
+  fontsize_row = 9,
+  fontsize_col = 9,
+  main = "Lymphocytes-related: source-target cell diff prob\n(High - Low, aggregated by cell pairs)"
+)
+dev.off()
+
+cat("Heatmap 2 saved to: Lymphocytes_source_target_heatmap.pdf\n")
+
+sanitize_subset <- function(seurat_obj, cells, group_col = "celltype_group", min_cells = 1) {
+  meta <- seurat_obj[[]][cells, , drop = FALSE]
+  
+  meta[[group_col]] <- droplevels(factor(as.character(meta[[group_col]])))
+  tab <- table(meta[[group_col]])
+
+  drop_lvls <- names(tab)[tab < min_cells]
+  if (length(drop_lvls)) {
+    keep_cells <- cells[!(meta[[group_col]] %in% drop_lvls)]
+    meta <- seurat_obj[[]][keep_cells, , drop = FALSE]
+    meta[[group_col]] <- droplevels(factor(as.character(meta[[group_col]])))
+    cells <- keep_cells
+  }
+  list(cells = cells, table = table(meta[[group_col]]))
+}
+
+run_cellchat_counts_merged <- function(seurat_obj, cells_subset, min_cells = 10, project_name = "CellChat") {
+  library(CellChat)
+  library(Matrix)
+  
+  message("获取合并层数据...")
+  if (!"counts_merged" %in% Layers(seurat_obj[["RNA"]])) {
+    stop("Seurat对象中未找到 'counts_merged' 层。")
+  }
+  data.input <- LayerData(seurat_obj, assay = "RNA", layer = "counts_merged")
+  
+  valid_cells <- intersect(cells_subset, colnames(data.input))
+  if (length(valid_cells) == 0) {
+    stop("没有任何细胞存在于表达矩阵中。请检查细胞ID是否匹配。")
+  }
+  if (length(valid_cells) < length(cells_subset)) {
+    warning("过滤掉了 ", length(cells_subset) - length(valid_cells), " 个不存在于表达矩阵中的细胞")
+  }
+  
+
+  meta <- seurat_obj[[]][valid_cells, , drop = FALSE]
+  cell_type_col <- "celltype_group"
+  if (!cell_type_col %in% colnames(meta)) {
+    stop("在元数据中找不到列：'", cell_type_col, "'。可用列：", paste(colnames(meta), collapse = ", "))
+  }
+  
+
+  if (!is.factor(meta[[cell_type_col]])) {
+    meta[[cell_type_col]] <- factor(meta[[cell_type_col]])
+  }
+  meta[[cell_type_col]] <- droplevels(meta[[cell_type_col]])
+  
+
+  tab_now <- table(meta[[cell_type_col]])
+  small_lvls <- names(tab_now)[tab_now < min_cells]
+  if (length(small_lvls) > 0) {
+    message("剔除在子集中细胞数 <", min_cells, " 的亚型：", paste(small_lvls, collapse = ", "))
+    keep <- !(meta[[cell_type_col]] %in% small_lvls)
+    meta <- meta[keep, , drop = FALSE]
+    valid_cells <- rownames(meta)
+  }
+  
+
+  data.input <- data.input[, valid_cells, drop = FALSE]
+  stopifnot(identical(colnames(data.input), rownames(meta)))
+  
+
+  message(">> 入口 meta 分组计数（celltype_group）：")
+  print(table(meta[[cell_type_col]]))
+  message(">> 入口 meta 分组 levels（已 droplevels）：")
+  print(levels(meta[[cell_type_col]]))
+  message("创建CellChat对象...")
+  cellchat <- createCellChat(
+    object = data.input,
+    meta = meta,
+    group.by = cell_type_col
+  )
+
+  try({
+    if ("project.name" %in% slotNames(cellchat)) {
+      cellchat@project.name <- project_name
+    } else if ("projectName" %in% slotNames(cellchat)) {
+      cellchat@projectName <- project_name
+    } else {
+      message("当前CellChat版本不支持设置项目名称")
+    }
+  }, silent = TRUE)
+
+  message("加载CellChat数据库...")
+  cellchat@DB <- CellChatDB.human
+  
+  message("设置细胞身份...")
+  cellchat <- setIdent(cellchat, ident.use = cell_type_col)
+  
+  message(">> 数据子集化")
+  cellchat <- subsetData(cellchat)
+  
+  message(">> 识别过表达基因")
+  cellchat <- identifyOverExpressedGenes(cellchat)
+  
+  message(">> 识别过表达相互作用")
+  cellchat <- identifyOverExpressedInteractions(cellchat)
+  
+  message(">> 计算通讯概率 (truncatedMean)")
+  cellchat <- computeCommunProb(
+    cellchat,
+    type = "truncatedMean",
+    trim = 0.1,
+    population.size = TRUE
+  )
+  
+  message(">> 过滤微弱信号")
+  cellchat <- filterCommunication(cellchat, min.cells = min_cells)
+  
+  message(">> 通路水平分析")
+  cellchat <- computeCommunProbPathway(cellchat)
+  
+  message(">> 网络聚合")
+  cellchat <- aggregateNet(cellchat)
+  
+  message("分析完成! 返回CellChat对象")
+  return(cellchat)
+}
+
+chk_high <- sanitize_subset(seuratdta, cells_high_bal, group_col = "celltype_group", min_cells = 1)
+chk_low  <- sanitize_subset(seuratdta, cells_low_bal,  group_col = "celltype_group", min_cells = 1)
+
+cells_high_sane <- chk_high$cells
+cells_low_sane  <- chk_low$cells
+
+cellchat_high <- run_cellchat_counts_merged(
+  seuratdta, cells_high_sane, min_cells = 1, project_name = "ANXA4_High"
+)
+cellchat_low <- run_cellchat_counts_merged(
+  seuratdta, cells_low_sane,  min_cells = 1, project_name = "ANXA4_Low"
+)
+table(cellchat_high@idents)
+levels(cellchat_high@idents)
+table(cellchat_low@idents)
+levels(cellchat_low@idents)
