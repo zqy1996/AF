@@ -1,0 +1,50 @@
+{
+  "series": "GSE331446",
+  "source": "NCBI GEO",
+  "tissue_constraint": "All six GEO samples are human right atrial appendage/right atrial FFPE sections.",
+  "comparison_scope": "Within right atrial appendage Visium sections only.",
+  "temporal_analysis": "No explicit time point, AF/SR group, or ordered disease-stage metadata is provided in the GEO series matrix; sample identifiers 8A/8C/9A/9B/9C/9D should not be treated as time.",
+  "marker_sets": {
+    "cardiomyocyte": [
+      "TTN",
+      "MYH6",
+      "MYH7",
+      "TNNT2",
+      "TNNI3",
+      "ACTC1",
+      "MYL2",
+      "MYL7",
+      "MYBPC3",
+      "NPPA",
+      "NPPB"
+    ],
+    "pacemaker_autonomic": [
+      "HCN4",
+      "SHOX2",
+      "TBX3",
+      "TBX18",
+      "ISL1",
+      "CACNA1D",
+      "CACNA1G",
+      "RYR2",
+      "GJA5",
+      "TBX5"
+    ],
+    "macrophage_anxa4": [
+      "ANXA4",
+      "CD68",
+      "LYZ",
+      "C1QA",
+      "C1QB",
+      "C1QC",
+      "CD14",
+      "FCGR3A",
+      "MSR1",
+      "MARCO",
+      "CD163",
+      "MRC1",
+      "IL1B",
+      "CCL2"
+    ]
+  }
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "srx": "SRX33529334",
+    "srr": "SRR38746338",
+    "spots": "245573295",
+    "bases": "28977648810",
+    "size": "10329541502",
+    "experiment_title": "GSM9746005: Human right atrial Visium spatial transcriptomics sample 8A; Homo sapiens; OTHER",
+    "sample_accession": "SRS29228549",
+    "study_accession": "SRP702077"
+  },
+  {
+    "srx": "SRX33529335",
+    "srr": "SRR38746337",
+    "spots": "319235297",
+    "bases": "37669765046",
+    "size": "13382142733",
+    "experiment_title": "GSM9746006: Human right atrial Visium spatial transcriptomics sample 8C; Homo sapiens; OTHER",
+    "sample_accession": "SRS29228550",
+    "study_accession": "SRP702077"
+  },
+  {
+    "srx": "SRX33529336",
+    "srr": "SRR38746336",
+    "spots": "375928794",
+    "bases": "44359597692",
+    "size": "15611641303",
+    "experiment_title": "GSM9746007: Human right atrial Visium spatial transcriptomics sample 9A; Homo sapiens; OTHER",
+    "sample_accession": "SRS29228551",
+    "study_accession": "SRP702077"
+  },
+  {
+    "srx": "SRX33529337",
+    "srr": "SRR38746335",
+    "spots": "322402102",
+    "bases": "38043448036",
+    "size": "13354436995",
+    "experiment_title": "GSM9746008: Human right atrial Visium spatial transcriptomics sample 9B; Homo sapiens; OTHER",
+    "sample_accession": "SRS29228552",
+    "study_accession": "SRP702077"
+  },
+  {
+    "srx": "SRX33529338",
+    "srr": "SRR38746334",
+    "spots": "402515519",
+    "bases": "47496831242",
+    "size": "16827116661",
+    "experiment_title": "GSM9746009: Human right atrial Visium spatial transcriptomics sample 9C; Homo sapiens; OTHER",
+    "sample_accession": "SRS29228553",
+    "study_accession": "SRP702077"
+  },
+  {
+    "srx": "SRX33529339",
+    "srr": "SRR38746333",
+    "spots": "343031286",
+    "bases": "40477691748",
+    "size": "14306224440",
+    "experiment_title": "GSM9746010: Human right atrial Visium spatial transcriptomics sample 9D; Homo sapiens; OTHER",
+    "sample_accession": "SRS29228554",
+    "study_accession": "SRP702077"
+  }
+]

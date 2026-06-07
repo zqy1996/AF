@@ -1,0 +1,7 @@
+sample,total_filtered_spots,dominant_cardiomyocyte_spots,dominant_pacemaker_autonomic_spots,dominant_macrophage_anxa4_spots,no_marker_signal_spots,anxa4_positive_spots,anxa4_q75_cpm10k_positive_spots,macrophage_q75_cpm10k_positive_spots,anxa4_high_macrophage_proxy_spots
+Sample_8A,2873,2870,0,0,3,110,9.735938727997983,19.37984496124031,15
+Sample_8C,2153,2117,0,31,5,255,6.933670886562789,24.316123188405797,39
+Sample_9A,3383,3368,1,2,12,586,4.052561336764802,14.63057790782736,94
+Sample_9B,1990,1986,0,4,0,217,5.15729757607014,18.433179723502302,33
+Sample_9C,2956,2938,0,18,0,537,4.304778303917348,14.357501794687725,83
+Sample_9D,2133,2120,1,12,0,248,8.820661316393064,15.10806408612989,45
