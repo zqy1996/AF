@@ -16,3 +16,4 @@
 - 2026-10-08 | 保留 | AF 仓库根目录 `immune` 仍保留在研究仓库，与 Vault 分离 | `/workspace/immune`
 - 2026-10-08 | 待确认 | 请在 Windows 本机创建 `D:\第二大脑` 并复制本 Vault 内容后用 Obsidian 打开 | `D:\第二大脑`
 - 2026-10-08 | 下一步 | 将第一份测试素材放入 `raw/inbox/`，再按 AGENTS 自生长流程更新 Wiki | `raw/inbox/`
+- 2026-10-08 15:41 UTC | 创建完成 | 云端已在 `/mnt/d/第二大脑`（D 盘仓库路径）完成 Vault 全量创建；并附带 Windows 一键安装脚本 | `/mnt/d/第二大脑`
