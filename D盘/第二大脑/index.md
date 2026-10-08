@@ -1,66 +1,65 @@
-# 第二大脑 · Vault 首页
+# 第二大脑 · Vault 首页 / Catalog
 
-> LLM 自生长知识库 · 服务 **临床 / 生物信息技术 / 文献**  
-> Agent 开工前请先读：[[AGENTS]]  
-> **本机 Vault 根目录：`D:\第二大脑`**（云端对应 `/mnt/d/第二大脑` 与仓库 `D盘/第二大脑`）
-
----
-
-## 快速入口
-
-| 层 | 说明 | 入口 |
-|----|------|------|
-| Schema | Agent 工作规则 | [[AGENTS]] |
-| Log | 变更与待确认（只追加） | [[log]] |
-| Raw | 原始素材（只读） | [[raw/inbox/README\|Inbox]] |
-| Wiki | 可复用知识弹药 | 见下方 |
+> LLM Wiki 自生长 · **临床 / 生物信息技术 / 文献**  
+> Schema：[[AGENTS]] · 本机：`D:\第二大脑` · 素材入口：`raw/inbox/`
 
 ---
 
-## Wiki 弹药库
+## 特殊文件
 
-- [[wiki/accounts/README|对标账号]] `wiki/accounts/`
-- [[wiki/articles/README|文章拆解]] `wiki/articles/`
-- [[wiki/titles/README|标题模式]] `wiki/titles/`
-- [[wiki/topics/README|选题]] `wiki/topics/`
-- [[wiki/structures/README|结构模板]] `wiki/structures/`
-- [[wiki/tools/README|工具]] `wiki/tools/`
-- [[wiki/audience/README|读者需求]] `wiki/audience/`
-- [[wiki/writing/README|写作经验]] `wiki/writing/`
+| 文件 | 作用 |
+|------|------|
+| [[AGENTS]] | Schema（必读） |
+| [[log]] | 只追加时间线 |
+| [[wiki/synthesis\|Synthesis]] | 跨来源总论 |
+| [[wiki/contradictions\|Contradictions]] | 冲突账本 |
 
 ---
 
-## 三大服务板块
+## LLM Wiki 核心（先读这里做 Query）
 
-本库不按板块硬拆顶层目录（避免过早过度设计）。用标签区分语境：
+### Sources
+- [[sources/karpathy-llm-wiki-gist]] — Karpathy LLM Wiki Gist
+- [[sources/cobusgreyling-llm-wiki-readme]] — 开源参考实现
 
-- `#临床` — 测评要点、诊疗相关科普/专业内容、病例经验沉淀
-- `#生物信息技术` — 方法、工具链、可复现分析、教程与对比测评
-- `#文献` — 证据链、论文拆解、引用与写书素材
+### Concepts
+- [[LLM-Wiki模式]] — 核心范式
+- [[RAG对比]] — 与纯 RAG 的差异
+- [[Memex]] — 思想谱系
 
-写作 / 测评 / 书稿 Agent 应优先检索对应标签下的 Wiki 页面。
+### Entities
+- [[Andrej-Karpathy]]
 
----
-
-## 新素材放哪里？
-
-**第一份测试素材 → `raw/inbox/`**
-
-分类明确后再归入：
-
-- 文章/网页 → `raw/articles/`
-- 截图 → `raw/screenshots/`
-- 评论 → `raw/comments/`
-- 数据 → `raw/data/`
-- AI 对话 → `raw/chats/`
-
-然后按 [[AGENTS]] 中的自生长流程更新 Wiki，并追加 [[log]]。
+### Answers
+- [[answers/为何不用纯RAG做第二大脑]]
 
 ---
 
-## 仓库说明
+## 创作弹药（内容生产）
 
-- 本目录已初始化为 Obsidian Vault（含 `.obsidian/`）。
-- Windows 请用 Obsidian 打开 **`D:\第二大脑`**（不要打开 AF 研究仓库根目录）。
-- AF 仓库中的研究脚本（如 `immune`）与本 Vault **分离**，不纳入 Raw/Wiki，除非主人明确要求迁移。
-- `backup/` 用于修改 Wiki 前的版本备份。
+- [[wiki/accounts/README|对标账号]] · [[wiki/articles/README|文章拆解]] · [[wiki/titles/README|标题]] · [[wiki/topics/README|选题]]
+- [[wiki/structures/README|结构]] · [[wiki/tools/README|工具]] · [[wiki/audience/README|读者]] · [[wiki/writing/README|写作经验]]
+
+---
+
+## Raw
+
+| 目录 | 用途 |
+|------|------|
+| [[raw/inbox/README\|inbox]] | **第一落点** |
+| `raw/articles/` | 文章原文（已含 karpathy gist） |
+| `raw/screenshots/` `raw/comments/` `raw/data/` `raw/chats/` `raw/assets/` | 截图/评论/数据/对话/附件 |
+
+---
+
+## 操作速记
+
+1. **Ingest** — 丢进 `raw/inbox/` → 按 [[AGENTS]] 更新多页 Wiki  
+2. **Query** — 先读本 index → 回答 → 有价值则归档 `wiki/answers/`  
+3. **Lint** — 查断链/孤儿/矛盾 → 记 log  
+
+---
+
+## 三大板块标签
+
+`#临床` `#生物信息技术` `#文献` — 目录不硬拆，用标签区分。
