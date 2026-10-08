@@ -1,19 +1,20 @@
-# D 盘第二大脑仓库 — 已创建
+# D 盘第二大脑
 
-## 云端（已完成）
+## 状态
 
-Vault 已在 D 盘路径创建完毕：
+- Vault 已按 **Karpathy LLM Wiki** 完善（Ingest / Query / Lint + entities/concepts/sources/answers）
+- Git 包：`D盘/第二大脑/`
+- 安装包：`第二大脑-Vault.zip` + `安装到D盘-第二大脑.bat`
+- 云端镜像：`/mnt/d/第二大脑`
 
-- `/mnt/d/第二大脑` ← 云端 D 盘仓库（全量结构就绪）
-- 仓库同步包：`D盘/第二大脑/`
-- 安装包：`D盘/第二大脑-Vault.zip`
+## 同步到本机 `D:\第二大脑`
 
-## 本机 Windows 物理 D 盘
+云端仍看不到 worker 时，任选：
 
-云端 Agent **无法直连**你电脑的物理磁盘。若本机尚未有 `D:\第二大脑`，下载本目录后双击：
+```powershell
+# 推荐：常驻 worker（窗口不要关）
+cd D:\第二大脑
+agent worker start --name "second-brain" --worker-dir "D:\第二大脑"
+```
 
-`安装到D盘-第二大脑.bat`
-
-将自动创建并写入 `D:\第二大脑`。
-
-然后用 Obsidian → Open folder as vault → `D:\第二大脑`。
+或解压/运行本目录安装脚本写入文件后，用 Obsidian 打开 `D:\第二大脑`。
