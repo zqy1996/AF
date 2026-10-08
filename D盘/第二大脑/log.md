@@ -12,4 +12,7 @@
 - 2026-10-08 | 保留 | 根目录既有文件 `immune`（研究脚本）未改动、未迁移 | `immune`
 - 2026-10-08 | 待确认 | 是否将 `immune` 或其它研究产物迁入 `raw/data/`；是否在本机 D: 盘同步镜像此 Vault | —
 - 2026-10-08 | 部署 | 下载 Obsidian Linux AppImage v1.14.4 至云端 `~/Applications/`（二进制不入库）；说明见 `tools/obsidian/README.md` | `tools/obsidian/`
+- 2026-10-08 | 迁移 | 按「D 盘建库」要求，将 Vault 从 AF 仓库根迁至 `D盘/第二大脑/`，并镜像到 `/mnt/d/第二大脑/`；目标本机路径 `D:\第二大脑` | `D盘/第二大脑` `/mnt/d/第二大脑`
+- 2026-10-08 | 保留 | AF 仓库根目录 `immune` 仍保留在研究仓库，与 Vault 分离 | `/workspace/immune`
+- 2026-10-08 | 待确认 | 请在 Windows 本机创建 `D:\第二大脑` 并复制本 Vault 内容后用 Obsidian 打开 | `D:\第二大脑`
 - 2026-10-08 | 下一步 | 将第一份测试素材放入 `raw/inbox/`，再按 AGENTS 自生长流程更新 Wiki | `raw/inbox/`
