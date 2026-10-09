@@ -30,3 +30,5 @@
 ## [2026-10-08] synthesis-update | 确立「LLM Wiki 核心 + 创作弹药层」双层并存
 
 ## [2026-10-08] init | 待本机 worker：`agent worker start --worker-dir D:\第二大脑` 后同步落盘
+
+## [2026-10-09] init | 检测到 worker LAPTOP-JGEBOIUJ；本会话 usePrivateWorker=false，需 My Machines 新 Agent 落盘（见 D盘/同步到本机-worker提示词.md）
