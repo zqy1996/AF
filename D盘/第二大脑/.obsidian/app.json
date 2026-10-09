@@ -1,0 +1,9 @@
+{
+  "alwaysUpdateLinks": true,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "raw/inbox",
+  "attachmentFolderPath": "raw/assets",
+  "showUnsupportedFiles": true,
+  "strictLineBreaks": false,
+  "promptDelete": true
+}

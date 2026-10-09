@@ -1,0 +1,22 @@
+# Obsidian local UI state (keep shared vault config)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/workspaces.json
+.obsidian/cache
+.obsidian/plugins/*/data.json
+.trash/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Obsidian desktop binary (download separately; see tools/obsidian/README.md)
+tools/obsidian/*.AppImage
+*.AppImage
+
+# Large binary dumps in inbox (keep structure; ignore heavy dumps if needed)
+# Uncomment if inbox grows too large for git:
+# raw/inbox/**
+# !raw/inbox/README.md
